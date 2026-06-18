@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.Data;
+using System.Data.SqlClient;
 using System.Globalization;
 using System.IO;
 using System.Windows;
@@ -12,8 +14,11 @@ namespace VelosipedDrive
     public partial class ProductsWindow : Window
     {
         private readonly string role;
+
         private DataTable productsTable;
         private DataTable currentTable;
+
+        private const string ProductTableName = "dbo.Tovar_import";
 
         public ProductsWindow(string userRole)
         {
@@ -372,12 +377,273 @@ namespace VelosipedDrive
             }
         }
 
-        private void LogoutButton_Click(object sender, RoutedEventArgs e)
+        private void AddProductButton_Click(object sender, RoutedEventArgs e)
         {
-            MainWindow mainWindow = new MainWindow();
-            mainWindow.Show();
+            ProductEditWindow window = new ProductEditWindow();
 
-            this.Close();
+            if (window.ShowDialog() != true)
+                return;
+
+            try
+            {
+                InsertProduct(window);
+
+                MessageBox.Show(
+                    "Товар добавлен.",
+                    "Успешно",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information
+                );
+
+                LoadProducts();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    "Не удалось добавить товар.\n\n" + ex.Message,
+                    "Ошибка",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error
+                );
+            }
         }
-    }
-}
+
+        private void EditProductButton_Click(object sender, RoutedEventArgs e)
+        {
+            DataRowView selectedRow = ProductsDataGrid.SelectedItem as DataRowView;
+
+            if (selectedRow == null)
+            {
+                MessageBox.Show(
+                    "Выберите товар для редактирования.",
+                    "Ошибка",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning
+                );
+                return;
+            }
+
+            string articleColumn = FindColumnName("артикул", "article");
+
+            if (string.IsNullOrWhiteSpace(articleColumn))
+            {
+                MessageBox.Show(
+                    "Не найдена колонка артикула.",
+                    "Ошибка",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error
+                );
+                return;
+            }
+
+            string oldArticle = selectedRow[articleColumn].ToString();
+
+            ProductEditWindow window = new ProductEditWindow(selectedRow);
+
+            if (window.ShowDialog() != true)
+                return;
+
+            try
+            {
+                UpdateProduct(window, oldArticle);
+
+                MessageBox.Show(
+                    "Товар изменён.",
+                    "Успешно",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information
+                );
+
+                LoadProducts();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    "Не удалось изменить товар.\n\n" + ex.Message,
+                    "Ошибка",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error
+                );
+            }
+        }
+
+        private void DeleteProductButton_Click(object sender, RoutedEventArgs e)
+        {
+            DataRowView selectedRow = ProductsDataGrid.SelectedItem as DataRowView;
+
+            if (selectedRow == null)
+            {
+                MessageBox.Show(
+                    "Выберите товар для удаления.",
+                    "Ошибка",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning
+                );
+                return;
+            }
+
+            string articleColumn = FindColumnName("артикул", "article");
+
+            if (string.IsNullOrWhiteSpace(articleColumn))
+            {
+                MessageBox.Show(
+                    "Не найдена колонка артикула.",
+                    "Ошибка",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error
+                );
+                return;
+            }
+
+            string article = selectedRow[articleColumn].ToString();
+
+            if (IsProductUsedInOrders(article))
+            {
+                MessageBox.Show(
+                    "Товар присутствует в заказе. Удаление запрещено.",
+                    "Удаление невозможно",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning
+                );
+                return;
+            }
+
+            MessageBoxResult result = MessageBox.Show(
+                "Удалить товар с артикулом " + article + "?",
+                "Подтверждение удаления",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning
+            );
+
+            if (result != MessageBoxResult.Yes)
+                return;
+
+            try
+            {
+                string query = "DELETE FROM dbo.Tovar_import WHERE " + EscapeSqlColumn(articleColumn) + " = @article";
+
+                using (SqlConnection connection = new SqlConnection(Db.ConnectionString))
+                {
+                    connection.Open();
+
+                    SqlCommand command = new SqlCommand(query, connection);
+                    command.Parameters.AddWithValue("@article", article);
+
+                    command.ExecuteNonQuery();
+                }
+
+                MessageBox.Show(
+                    "Товар удалён.",
+                    "Успешно",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information
+                );
+
+                ProductImage.Source = null;
+                ImageInfoTextBlock.Text = "";
+
+                LoadProducts();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    "Не удалось удалить товар.\n\n" + ex.Message,
+                    "Ошибка",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error
+                );
+            }
+        }
+
+        private void OrdersButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                string orderTableName = FindTableName("заказ", "order");
+
+                if (string.IsNullOrWhiteSpace(orderTableName))
+                {
+                    MessageBox.Show(
+                        "Таблица заказов не найдена.",
+                        "Ошибка",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Error
+                    );
+                    return;
+                }
+
+                DataTable orders = Db.GetTable("SELECT * FROM dbo." + EscapeSqlTable(orderTableName));
+
+                Window window = new Window();
+                window.Title = "Заказы";
+                window.Width = 900;
+                window.Height = 500;
+                window.WindowStartupLocation = WindowStartupLocation.CenterScreen;
+                window.FontFamily = new FontFamily("Arial");
+
+                DataGrid grid = new DataGrid();
+                grid.IsReadOnly = true;
+                grid.AutoGenerateColumns = true;
+                grid.ItemsSource = orders.DefaultView;
+
+                window.Content = grid;
+                window.ShowDialog();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    "Не удалось открыть заказы.\n\n" + ex.Message,
+                    "Ошибка",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error
+                );
+            }
+        }
+
+        private void InsertProduct(ProductEditWindow window)
+        {
+            Dictionary<string, object> values = BuildProductValues(window);
+
+            List<string> columns = new List<string>();
+            List<string> parameters = new List<string>();
+
+            using (SqlConnection connection = new SqlConnection(Db.ConnectionString))
+            {
+                connection.Open();
+
+                SqlCommand command = new SqlCommand();
+                command.Connection = connection;
+
+                int index = 0;
+
+                foreach (KeyValuePair<string, object> pair in values)
+                {
+                    if (string.IsNullOrWhiteSpace(pair.Key))
+                        continue;
+
+                    string parameterName = "@p" + index;
+
+                    columns.Add(EscapeSqlColumn(pair.Key));
+                    parameters.Add(parameterName);
+                    command.Parameters.AddWithValue(parameterName, pair.Value ?? DBNull.Value);
+
+                    index++;
+                }
+
+                string query = "INSERT INTO dbo.Tovar_import (" +
+                               string.Join(", ", columns) +
+                               ") VALUES (" +
+                               string.Join(", ", parameters) +
+                               ")";
+
+                command.CommandText = query;
+                command.ExecuteNonQuery();
+            }
+        }
+
+        private void UpdateProduct(ProductEditWindow window, string oldArticle)
+        {
+            string articleColumn = FindColumnName("артикул", "article");
+
+            Dictionary<string, object> values = BuildProductValues(window);
+
