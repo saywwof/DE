@@ -6,7 +6,7 @@ namespace VelosipedDrive
     public static class Db
     {
         public static string ConnectionString =
-            @"Data Source=.\SQLEXPRESS;Initial Catalog=velosiped;Integrated Security=True;";
+            @"Data Source=192.168.40.40;Initial Catalog=velosiped;User ID=DemoUser18;Password=Demo2026;TrustServerCertificate=True;";
 
         public static DataTable GetTable(string query)
         {
