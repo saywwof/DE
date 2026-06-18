@@ -1,0 +1,65 @@
+USE velosiped;
+GO
+
+DROP TABLE IF EXISTS dbo.ER_OrderItems;
+DROP TABLE IF EXISTS dbo.ER_Orders;
+DROP TABLE IF EXISTS dbo.ER_Products;
+DROP TABLE IF EXISTS dbo.ER_Users;
+DROP TABLE IF EXISTS dbo.ER_Roles;
+DROP TABLE IF EXISTS dbo.ER_PickupPoints;
+GO
+
+CREATE TABLE dbo.ER_Roles (
+    RoleId INT IDENTITY(1,1) PRIMARY KEY,
+    RoleName NVARCHAR(50) NOT NULL
+);
+
+CREATE TABLE dbo.ER_Users (
+    UserId INT IDENTITY(1,1) PRIMARY KEY,
+    Login NVARCHAR(100) NOT NULL UNIQUE,
+    Password NVARCHAR(100) NOT NULL,
+    FullName NVARCHAR(200),
+    RoleId INT NOT NULL,
+    FOREIGN KEY (RoleId) REFERENCES dbo.ER_Roles(RoleId)
+);
+
+CREATE TABLE dbo.ER_PickupPoints (
+    PickupPointId INT IDENTITY(1,1) PRIMARY KEY,
+    Address NVARCHAR(300) NOT NULL
+);
+
+CREATE TABLE dbo.ER_Products (
+    ProductId INT IDENTITY(1,1) PRIMARY KEY,
+    Article NVARCHAR(50) NOT NULL UNIQUE,
+    ProductName NVARCHAR(300) NOT NULL,
+    Category NVARCHAR(150),
+    Description NVARCHAR(MAX),
+    Manufacturer NVARCHAR(150),
+    Supplier NVARCHAR(150),
+    Price DECIMAL(10,2) NOT NULL,
+    Unit NVARCHAR(50),
+    Quantity INT NOT NULL DEFAULT 0,
+    Discount DECIMAL(5,2) DEFAULT 0,
+    ImagePath NVARCHAR(255)
+);
+
+CREATE TABLE dbo.ER_Orders (
+    OrderId INT IDENTITY(1,1) PRIMARY KEY,
+    UserId INT NULL,
+    PickupPointId INT NULL,
+    OrderDate DATETIME NOT NULL DEFAULT GETDATE(),
+    Status NVARCHAR(100),
+    FOREIGN KEY (UserId) REFERENCES dbo.ER_Users(UserId),
+    FOREIGN KEY (PickupPointId) REFERENCES dbo.ER_PickupPoints(PickupPointId)
+);
+
+CREATE TABLE dbo.ER_OrderItems (
+    OrderItemId INT IDENTITY(1,1) PRIMARY KEY,
+    OrderId INT NOT NULL,
+    ProductId INT NOT NULL,
+    Quantity INT NOT NULL DEFAULT 1,
+    Price DECIMAL(10,2) NOT NULL,
+    FOREIGN KEY (OrderId) REFERENCES dbo.ER_Orders(OrderId),
+    FOREIGN KEY (ProductId) REFERENCES dbo.ER_Products(ProductId)
+);
+GO
