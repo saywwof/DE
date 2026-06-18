@@ -1,0 +1,36 @@
+using System.Data;
+using System.Data.SqlClient;
+
+namespace VelosipedDrive
+{
+    public static class Db
+    {
+        public static string ConnectionString =
+            @"Data Source=.\SQLEXPRESS;Initial Catalog=velosiped;Integrated Security=True;";
+
+        public static DataTable GetTable(string query)
+        {
+            using (SqlConnection connection = new SqlConnection(ConnectionString))
+            {
+                connection.Open();
+
+                SqlDataAdapter adapter = new SqlDataAdapter(query, connection);
+                DataTable table = new DataTable();
+                adapter.Fill(table);
+
+                return table;
+            }
+        }
+
+        public static int Execute(string query)
+        {
+            using (SqlConnection connection = new SqlConnection(ConnectionString))
+            {
+                connection.Open();
+
+                SqlCommand command = new SqlCommand(query, connection);
+                return command.ExecuteNonQuery();
+            }
+        }
+    }
+}
