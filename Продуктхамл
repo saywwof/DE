@@ -51,29 +51,34 @@
             <StackPanel Orientation="Horizontal"
                         HorizontalAlignment="Right"
                         DockPanel.Dock="Right">
+
                 <Button x:Name="AddProductButton"
                         Content="Добавить товар"
                         Width="130"
                         Height="32"
-                        Margin="5,0"/>
+                        Margin="5,0"
+                        Click="AddProductButton_Click"/>
 
                 <Button x:Name="EditProductButton"
                         Content="Редактировать"
                         Width="130"
                         Height="32"
-                        Margin="5,0"/>
+                        Margin="5,0"
+                        Click="EditProductButton_Click"/>
 
                 <Button x:Name="DeleteProductButton"
                         Content="Удалить"
                         Width="100"
                         Height="32"
-                        Margin="5,0"/>
+                        Margin="5,0"
+                        Click="DeleteProductButton_Click"/>
 
                 <Button x:Name="OrdersButton"
                         Content="Заказы"
                         Width="100"
                         Height="32"
-                        Margin="5,0"/>
+                        Margin="5,0"
+                        Click="OrdersButton_Click"/>
             </StackPanel>
         </DockPanel>
 
