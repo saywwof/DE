@@ -1,0 +1,149 @@
+using System;
+using System.Data;
+using System.Windows;
+
+namespace VelosipedDrive
+{
+    public partial class MainWindow : Window
+    {
+        public MainWindow()
+        {
+            InitializeComponent();
+        }
+
+        private void LoginButton_Click(object sender, RoutedEventArgs e)
+        {
+            string login = LoginTextBox.Text.Trim();
+            string password = PasswordBox.Password.Trim();
+
+            if (string.IsNullOrWhiteSpace(login) || string.IsNullOrWhiteSpace(password))
+            {
+                MessageBox.Show(
+                    "Введите логин и пароль.",
+                    "Ошибка входа",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning
+                );
+                return;
+            }
+
+            try
+            {
+                DataTable users = Db.GetTable("SELECT * FROM dbo.user_import");
+
+                foreach (DataRow row in users.Rows)
+                {
+                    bool loginFound = false;
+                    bool passwordFound = false;
+
+                    foreach (DataColumn column in users.Columns)
+                    {
+                        string value = "";
+
+                        if (row[column] != null && row[column] != DBNull.Value)
+                        {
+                            value = row[column].ToString().Trim();
+                        }
+
+                        if (value.Equals(login, StringComparison.OrdinalIgnoreCase))
+                        {
+                            loginFound = true;
+                        }
+
+                        if (value == password)
+                        {
+                            passwordFound = true;
+                        }
+                    }
+
+                    if (loginFound && passwordFound)
+                    {
+                        string role = DetectRole(row);
+                        string fullName = DetectFullName(row);
+
+                        ProductsWindow productsWindow = new ProductsWindow(role);
+                        productsWindow.Show();
+
+                        this.Close();
+                        return;
+                    }
+                }
+
+                MessageBox.Show(
+                    "Неверный логин или пароль.",
+                    "Ошибка входа",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error
+                );
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    "Не удалось выполнить вход.\n\n" + ex.Message,
+                    "Ошибка базы данных",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error
+                );
+            }
+        }
+
+        private string DetectRole(DataRow row)
+        {
+            foreach (DataColumn column in row.Table.Columns)
+            {
+                if (row[column] == null || row[column] == DBNull.Value)
+                {
+                    continue;
+                }
+
+                string value = row[column].ToString().Trim().ToLower();
+
+                if (value.Contains("админ") || value.Contains("administrator"))
+                {
+                    return "Администратор";
+                }
+
+                if (value.Contains("менедж") || value.Contains("manager"))
+                {
+                    return "Менеджер";
+                }
+
+                if (value.Contains("клиент") || value.Contains("client"))
+                {
+                    return "Клиент";
+                }
+            }
+
+            return "Клиент";
+        }
+
+        private string DetectFullName(DataRow row)
+        {
+            foreach (DataColumn column in row.Table.Columns)
+            {
+                string columnName = column.ColumnName.ToLower();
+
+                if (columnName.Contains("фио") ||
+                    columnName.Contains("имя") ||
+                    columnName.Contains("name") ||
+                    columnName.Contains("fullname"))
+                {
+                    if (row[column] != null && row[column] != DBNull.Value)
+                    {
+                        return row[column].ToString().Trim();
+                    }
+                }
+            }
+
+            return "";
+        }
+
+        private void GuestButton_Click(object sender, RoutedEventArgs e)
+        {
+            ProductsWindow productsWindow = new ProductsWindow("Гость");
+            productsWindow.Show();
+
+            this.Close();
+        }
+    }
+}
