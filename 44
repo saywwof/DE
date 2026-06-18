@@ -1,0 +1,182 @@
+using System;
+using System.Data;
+using System.Globalization;
+using System.Windows;
+
+namespace VelosipedDrive
+{
+    public partial class ProductEditWindow : Window
+    {
+        public string Article => ArticleTextBox.Text.Trim();
+        public string ProductName => NameTextBox.Text.Trim();
+        public string Category => CategoryTextBox.Text.Trim();
+        public string Manufacturer => ManufacturerTextBox.Text.Trim();
+        public string Supplier => SupplierTextBox.Text.Trim();
+        public string Price => PriceTextBox.Text.Trim();
+        public string Unit => UnitTextBox.Text.Trim();
+        public string Quantity => QuantityTextBox.Text.Trim();
+        public string Discount => DiscountTextBox.Text.Trim();
+        public string Photo => PhotoTextBox.Text.Trim();
+
+        public ProductEditWindow()
+        {
+            InitializeComponent();
+
+            TitleTextBlock.Text = "Добавление товара";
+            UnitTextBox.Text = "шт.";
+            QuantityTextBox.Text = "0";
+            DiscountTextBox.Text = "0";
+        }
+
+        public ProductEditWindow(DataRowView row)
+        {
+            InitializeComponent();
+
+            TitleTextBlock.Text = "Редактирование товара";
+
+            ArticleTextBox.Text = GetValue(row, "артикул", "article");
+            NameTextBox.Text = GetValue(row, "наименование", "name");
+            CategoryTextBox.Text = GetValue(row, "категория", "category");
+            ManufacturerTextBox.Text = GetValue(row, "производ", "manufacturer");
+            SupplierTextBox.Text = GetValue(row, "постав", "supplier");
+            PriceTextBox.Text = GetValue(row, "цена", "price");
+            UnitTextBox.Text = GetValue(row, "единица", "unit");
+            QuantityTextBox.Text = GetValue(row, "колич", "склад", "quantity");
+            DiscountTextBox.Text = GetValue(row, "скид", "discount");
+            PhotoTextBox.Text = GetPhotoValue(row);
+        }
+
+        private string GetValue(DataRowView row, params string[] words)
+        {
+            foreach (DataColumn column in row.Row.Table.Columns)
+            {
+                string columnName = column.ColumnName.ToLower();
+
+                foreach (string word in words)
+                {
+                    if (columnName.Contains(word.ToLower()))
+                    {
+                        object value = row[column.ColumnName];
+
+                        if (value == null || value == DBNull.Value)
+                            return "";
+
+                        return value.ToString();
+                    }
+                }
+            }
+
+            return "";
+        }
+
+        private string GetPhotoValue(DataRowView row)
+        {
+            foreach (DataColumn column in row.Row.Table.Columns)
+            {
+                object value = row[column.ColumnName];
+
+                if (value == null || value == DBNull.Value)
+                    continue;
+
+                string text = value.ToString().Trim();
+
+                if (text.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) ||
+                    text.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase) ||
+                    text.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
+                {
+                    return text;
+                }
+            }
+
+            return "";
+        }
+
+        private void SaveButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (string.IsNullOrWhiteSpace(Article))
+            {
+                MessageBox.Show(
+                    "Введите артикул.",
+                    "Ошибка",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning
+                );
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(ProductName))
+            {
+                MessageBox.Show(
+                    "Введите наименование товара.",
+                    "Ошибка",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning
+                );
+                return;
+            }
+
+            decimal price;
+
+            if (!TryParseDecimal(Price, out price) || price < 0)
+            {
+                MessageBox.Show(
+                    "Цена должна быть числом и не может быть отрицательной.",
+                    "Ошибка",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning
+                );
+                return;
+            }
+
+            decimal quantity;
+
+            if (!TryParseDecimal(Quantity, out quantity) || quantity < 0)
+            {
+                MessageBox.Show(
+                    "Количество не может быть отрицательным.",
+                    "Ошибка",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning
+                );
+                return;
+            }
+
+            decimal discount;
+
+            if (!TryParseDecimal(Discount, out discount) || discount < 0)
+            {
+                MessageBox.Show(
+                    "Скидка должна быть числом и не может быть отрицательной.",
+                    "Ошибка",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning
+                );
+                return;
+            }
+
+            DialogResult = true;
+            Close();
+        }
+
+        private bool TryParseDecimal(string text, out decimal result)
+        {
+            text = text
+                .Replace("%", "")
+                .Replace(" ", "")
+                .Replace(",", ".");
+
+            return decimal.TryParse(
+                text,
+                NumberStyles.Any,
+                CultureInfo.InvariantCulture,
+                out result
+            );
+        }
+
+        private void CancelButton_Click(object sender, RoutedEventArgs e)
+        {
+            DialogResult = false;
+            Close();
+        }
+    }
+}
