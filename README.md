@@ -94,3 +94,85 @@ SELECT * FROM dbo.Products;
         </StackPanel>
     </Grid>
 </Window>
+
+
+
+
+
+using System;
+using System.Data.SqlClient;
+using System.Windows;
+
+namespace VelosipedDrive
+{
+    public partial class MainWindow : Window
+    {
+        private string connectionString =
+            @"Data Source=.\SQLEXPRESS;Initial Catalog=velosiped;Integrated Security=True;TrustServerCertificate=True;";
+
+        public MainWindow()
+        {
+            InitializeComponent();
+        }
+
+        private void LoginButton_Click(object sender, RoutedEventArgs e)
+        {
+            string login = LoginTextBox.Text.Trim();
+            string password = PasswordBox.Password.Trim();
+
+            if (string.IsNullOrWhiteSpace(login) || string.IsNullOrWhiteSpace(password))
+            {
+                MessageBox.Show("Введите логин и пароль");
+                return;
+            }
+
+            try
+            {
+                using (SqlConnection connection = new SqlConnection(connectionString))
+                {
+                    connection.Open();
+
+                    string query = @"
+                        SELECT TOP 1 *
+                        FROM dbo.user_import
+                        WHERE Логин = @login AND Пароль = @password";
+
+                    SqlCommand command = new SqlCommand(query, connection);
+                    command.Parameters.AddWithValue("@login", login);
+                    command.Parameters.AddWithValue("@password", password);
+
+                    SqlDataReader reader = command.ExecuteReader();
+
+                    if (reader.Read())
+                    {
+                        string role = "";
+
+                        if (reader["Роль"] != DBNull.Value)
+                            role = reader["Роль"].ToString();
+
+                        ProductsWindow productsWindow = new ProductsWindow(role);
+                        productsWindow.Show();
+
+                        this.Close();
+                    }
+                    else
+                    {
+                        MessageBox.Show("Неверный логин или пароль");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Ошибка подключения или авторизации:\n" + ex.Message);
+            }
+        }
+
+        private void GuestButton_Click(object sender, RoutedEventArgs e)
+        {
+            ProductsWindow productsWindow = new ProductsWindow("Гость");
+            productsWindow.Show();
+
+            this.Close();
+        }
+    }
+}
