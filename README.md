@@ -40,3 +40,57 @@ WHERE [Артикул] IS NOT NULL
 GO
 
 SELECT * FROM dbo.Products;
+
+
+
+
+<Window x:Class="VelosipedDrive.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Вход в систему"
+        Height="360"
+        Width="420"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="NoResize">
+
+    <Grid Margin="25">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Text="ООО Велосипед Драйв"
+                   FontSize="24"
+                   FontWeight="Bold"
+                   HorizontalAlignment="Center"
+                   Margin="0,0,0,25"/>
+
+        <StackPanel Grid.Row="1" Margin="0,0,0,12">
+            <TextBlock Text="Логин"/>
+            <TextBox x:Name="LoginTextBox"
+                     Height="32"
+                     FontSize="16"/>
+        </StackPanel>
+
+        <StackPanel Grid.Row="2" Margin="0,0,0,20">
+            <TextBlock Text="Пароль"/>
+            <PasswordBox x:Name="PasswordBox"
+                         Height="32"
+                         FontSize="16"/>
+        </StackPanel>
+
+        <StackPanel Grid.Row="3">
+            <Button Content="Войти"
+                    Height="36"
+                    Margin="0,0,0,10"
+                    Click="LoginButton_Click"/>
+
+            <Button Content="Просмотр товаров без авторизации"
+                    Height="36"
+                    Click="GuestButton_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>
