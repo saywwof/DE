@@ -1,0 +1,383 @@
+using System;
+using System.Data;
+using System.Globalization;
+using System.IO;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
+
+namespace VelosipedDrive
+{
+    public partial class ProductsWindow : Window
+    {
+        private readonly string role;
+        private DataTable productsTable;
+        private DataTable currentTable;
+
+        public ProductsWindow(string userRole)
+        {
+            InitializeComponent();
+
+            role = userRole;
+            RoleTextBlock.Text = "Роль: " + role;
+
+            ConfigureRoleAccess();
+            LoadProducts();
+        }
+
+        private void ConfigureRoleAccess()
+        {
+            AddProductButton.Visibility = Visibility.Collapsed;
+            EditProductButton.Visibility = Visibility.Collapsed;
+            DeleteProductButton.Visibility = Visibility.Collapsed;
+            OrdersButton.Visibility = Visibility.Collapsed;
+
+            if (role == "Гость")
+            {
+                FilterPanel.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            FilterPanel.Visibility = Visibility.Visible;
+
+            if (role == "Менеджер")
+            {
+                OrdersButton.Visibility = Visibility.Visible;
+            }
+
+            if (role == "Администратор")
+            {
+                AddProductButton.Visibility = Visibility.Visible;
+                EditProductButton.Visibility = Visibility.Visible;
+                DeleteProductButton.Visibility = Visibility.Visible;
+                OrdersButton.Visibility = Visibility.Visible;
+            }
+        }
+
+        private void LoadProducts()
+        {
+            try
+            {
+                string query = @"
+                    SELECT *
+                    FROM dbo.Tovar_import
+                    WHERE Артикул IS NOT NULL";
+
+                productsTable = Db.GetTable(query);
+                ApplyFilters();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    "Не удалось загрузить товары из базы данных.\n\n" + ex.Message,
+                    "Ошибка базы данных",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error
+                );
+            }
+        }
+
+        private void Filter_Changed(object sender, EventArgs e)
+        {
+            if (productsTable == null)
+                return;
+
+            ApplyFilters();
+        }
+
+        private void ApplyFilters()
+        {
+            DataTable result = productsTable.Clone();
+
+            string searchText = "";
+
+            if (SearchTextBox != null)
+                searchText = SearchTextBox.Text.Trim().ToLower();
+
+            string discountColumn = FindColumnName("скид", "discount");
+
+            foreach (DataRow row in productsTable.Rows)
+            {
+                if (!IsSearchMatch(row, searchText))
+                    continue;
+
+                if (!IsDiscountMatch(row, discountColumn))
+                    continue;
+
+                result.ImportRow(row);
+            }
+
+            currentTable = result;
+
+            DataView view = currentTable.DefaultView;
+            ApplySort(view);
+
+            ProductsDataGrid.ItemsSource = view;
+
+            if (CountTextBlock != null)
+                CountTextBlock.Text = "Найдено: " + currentTable.Rows.Count;
+        }
+
+        private bool IsSearchMatch(DataRow row, string searchText)
+        {
+            if (string.IsNullOrWhiteSpace(searchText))
+                return true;
+
+            foreach (DataColumn column in row.Table.Columns)
+            {
+                if (row[column] == null || row[column] == DBNull.Value)
+                    continue;
+
+                string value = row[column].ToString().ToLower();
+
+                if (value.Contains(searchText))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private bool IsDiscountMatch(DataRow row, string discountColumn)
+        {
+            if (DiscountFilterComboBox == null)
+                return true;
+
+            ComboBoxItem selectedItem = DiscountFilterComboBox.SelectedItem as ComboBoxItem;
+
+            if (selectedItem == null)
+                return true;
+
+            string tag = selectedItem.Tag.ToString();
+
+            if (tag == "all")
+                return true;
+
+            if (string.IsNullOrWhiteSpace(discountColumn))
+                return true;
+
+            decimal discount = ParseDecimal(row[discountColumn]);
+
+            if (tag == "0_1199")
+                return discount >= 0 && discount <= 11.99m;
+
+            if (tag == "12_1899")
+                return discount >= 12 && discount <= 18.99m;
+
+            if (tag == "19_plus")
+                return discount >= 19;
+
+            return true;
+        }
+
+        private void ApplySort(DataView view)
+        {
+            if (SortComboBox == null)
+                return;
+
+            ComboBoxItem selectedItem = SortComboBox.SelectedItem as ComboBoxItem;
+
+            if (selectedItem == null)
+                return;
+
+            string tag = selectedItem.Tag.ToString();
+
+            if (string.IsNullOrWhiteSpace(tag))
+            {
+                view.Sort = "";
+                return;
+            }
+
+            string priceColumn = FindColumnName("цена", "price");
+            string quantityColumn = FindColumnName("колич", "склад", "quantity");
+            string discountColumn = FindColumnName("скид", "discount");
+
+            if (tag == "price_asc" && !string.IsNullOrWhiteSpace(priceColumn))
+                view.Sort = EscapeColumn(priceColumn) + " ASC";
+
+            if (tag == "price_desc" && !string.IsNullOrWhiteSpace(priceColumn))
+                view.Sort = EscapeColumn(priceColumn) + " DESC";
+
+            if (tag == "qty_asc" && !string.IsNullOrWhiteSpace(quantityColumn))
+                view.Sort = EscapeColumn(quantityColumn) + " ASC";
+
+            if (tag == "qty_desc" && !string.IsNullOrWhiteSpace(quantityColumn))
+                view.Sort = EscapeColumn(quantityColumn) + " DESC";
+
+            if (tag == "discount_asc" && !string.IsNullOrWhiteSpace(discountColumn))
+                view.Sort = EscapeColumn(discountColumn) + " ASC";
+
+            if (tag == "discount_desc" && !string.IsNullOrWhiteSpace(discountColumn))
+                view.Sort = EscapeColumn(discountColumn) + " DESC";
+        }
+
+        private string EscapeColumn(string columnName)
+        {
+            return "[" + columnName.Replace("]", "]]") + "]";
+        }
+
+        private string FindColumnName(params string[] keywords)
+        {
+            if (productsTable == null)
+                return "";
+
+            foreach (DataColumn column in productsTable.Columns)
+            {
+                string columnName = column.ColumnName.ToLower();
+
+                foreach (string keyword in keywords)
+                {
+                    if (columnName.Contains(keyword.ToLower()))
+                        return column.ColumnName;
+                }
+            }
+
+            return "";
+        }
+
+        private decimal ParseDecimal(object value)
+        {
+            if (value == null || value == DBNull.Value)
+                return 0;
+
+            string text = value.ToString()
+                .Replace("%", "")
+                .Replace(" ", "")
+                .Replace(",", ".");
+
+            decimal number;
+
+            if (decimal.TryParse(
+                text,
+                NumberStyles.Any,
+                CultureInfo.InvariantCulture,
+                out number))
+            {
+                return number;
+            }
+
+            return 0;
+        }
+
+        private void ProductsDataGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (ProductsDataGrid.SelectedItem == null)
+                return;
+
+            DataRowView row = ProductsDataGrid.SelectedItem as DataRowView;
+
+            if (row == null)
+                return;
+
+            string photoName = FindPhotoName(row);
+            LoadProductImage(photoName);
+        }
+
+        private string FindPhotoName(DataRowView row)
+        {
+            foreach (DataColumn column in row.Row.Table.Columns)
+            {
+                object value = row[column.ColumnName];
+
+                if (value == null || value == DBNull.Value)
+                    continue;
+
+                string text = value.ToString().Trim();
+
+                if (text.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) ||
+                    text.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase) ||
+                    text.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
+                {
+                    return text;
+                }
+            }
+
+            return "";
+        }
+
+        private void LoadProductImage(string photoName)
+        {
+            string imagePath;
+
+            if (string.IsNullOrWhiteSpace(photoName))
+            {
+                imagePath = Path.Combine(
+                    AppDomain.CurrentDomain.BaseDirectory,
+                    "Images",
+                    "picture.png"
+                );
+            }
+            else
+            {
+                imagePath = Path.Combine(
+                    AppDomain.CurrentDomain.BaseDirectory,
+                    "Images",
+                    "Products",
+                    photoName
+                );
+            }
+
+            if (!File.Exists(imagePath))
+            {
+                ProductImage.Source = null;
+                ImageInfoTextBlock.Text = "Фото не найдено:\n" + imagePath;
+                return;
+            }
+
+            BitmapImage bitmap = new BitmapImage();
+            bitmap.BeginInit();
+            bitmap.UriSource = new Uri(imagePath, UriKind.Absolute);
+            bitmap.CacheOption = BitmapCacheOption.OnLoad;
+            bitmap.EndInit();
+
+            ProductImage.Source = bitmap;
+            ImageInfoTextBlock.Text = string.IsNullOrWhiteSpace(photoName)
+                ? "Заглушка picture.png"
+                : photoName;
+        }
+
+        private void ProductsDataGrid_LoadingRow(object sender, DataGridRowEventArgs e)
+        {
+            DataRowView row = e.Row.Item as DataRowView;
+
+            if (row == null)
+                return;
+
+            e.Row.Background = Brushes.White;
+            e.Row.Foreground = Brushes.Black;
+
+            string quantityColumn = FindColumnName("колич", "склад", "quantity");
+            string discountColumn = FindColumnName("скид", "discount");
+
+            decimal quantity = 1;
+            decimal discount = 0;
+
+            if (!string.IsNullOrWhiteSpace(quantityColumn))
+                quantity = ParseDecimal(row[quantityColumn]);
+
+            if (!string.IsNullOrWhiteSpace(discountColumn))
+                discount = ParseDecimal(row[discountColumn]);
+
+            if (quantity <= 0)
+            {
+                e.Row.Background = Brushes.LightGray;
+                e.Row.Foreground = Brushes.Black;
+                return;
+            }
+
+            if (discount > 15)
+            {
+                e.Row.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#483D8B"));
+                e.Row.Foreground = Brushes.White;
+            }
+        }
+
+        private void LogoutButton_Click(object sender, RoutedEventArgs e)
+        {
+            MainWindow mainWindow = new MainWindow();
+            mainWindow.Show();
+
+            this.Close();
+        }
+    }
+}
