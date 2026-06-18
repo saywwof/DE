@@ -14,7 +14,6 @@ namespace VelosipedDrive
     public partial class ProductsWindow : Window
     {
         private readonly string role;
-
         private DataTable productsTable;
         private DataTable currentTable;
 
@@ -261,8 +260,7 @@ namespace VelosipedDrive
 
             return 0;
         }
-
-        private void ProductsDataGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
+private void ProductsDataGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             if (ProductsDataGrid.SelectedItem == null)
                 return;
@@ -554,8 +552,7 @@ namespace VelosipedDrive
                 );
             }
         }
-
-        private void OrdersButton_Click(object sender, RoutedEventArgs e)
+private void OrdersButton_Click(object sender, RoutedEventArgs e)
         {
             try
             {
@@ -629,4 +626,141 @@ namespace VelosipedDrive
 
         private void InsertProduct(Dictionary<string, object> values)
         {
-            List<string> columns =
+            List<string> columns = new List<string>();
+            List<string> parameters = new List<string>();
+
+            using (SqlConnection connection = new SqlConnection(Db.ConnectionString))
+            {
+                connection.Open();
+
+                SqlCommand command = new SqlCommand();
+                command.Connection = connection;
+
+                int index = 0;
+
+                foreach (KeyValuePair<string, object> pair in values)
+                {
+                    string parameterName = "@p" + index;
+
+                    columns.Add(EscapeSqlColumn(pair.Key));
+                    parameters.Add(parameterName);
+                    command.Parameters.AddWithValue(parameterName, pair.Value ?? DBNull.Value);
+
+                    index++;
+                }
+
+                string query = "INSERT INTO dbo.Tovar_import (" +
+                               string.Join(", ", columns) +
+                               ") VALUES (" +
+                               string.Join(", ", parameters) +
+                               ")";
+
+                command.CommandText = query;
+                command.ExecuteNonQuery();
+            }
+        }
+
+        private void UpdateProduct(Dictionary<string, object> values, string oldArticle, string articleColumn)
+        {
+            List<string> setParts = new List<string>();
+
+            using (SqlConnection connection = new SqlConnection(Db.ConnectionString))
+            {
+                connection.Open();
+
+                SqlCommand command = new SqlCommand();
+                command.Connection = connection;
+
+                int index = 0;
+
+                foreach (KeyValuePair<string, object> pair in values)
+                {
+                    string parameterName = "@p" + index;
+
+                    setParts.Add(EscapeSqlColumn(pair.Key) + " = " + parameterName);
+                    command.Parameters.AddWithValue(parameterName, pair.Value ?? DBNull.Value);
+
+                    index++;
+                }
+
+                command.Parameters.AddWithValue("@oldArticle", oldArticle);
+
+                string query = "UPDATE dbo.Tovar_import SET " +
+                               string.Join(", ", setParts) +
+                               " WHERE " + EscapeSqlColumn(articleColumn) + " = @oldArticle";
+
+                command.CommandText = query;
+                command.ExecuteNonQuery();
+            }
+        }
+
+        private bool IsProductUsedInOrders(string article)
+        {
+            try
+            {
+                string orderTableName = FindTableName("заказ", "order");
+
+                if (string.IsNullOrWhiteSpace(orderTableName))
+                    return false;
+
+                DataTable orders = Db.GetTable("SELECT * FROM dbo." + EscapeSqlTable(orderTableName));
+
+                foreach (DataRow row in orders.Rows)
+                {
+                    foreach (DataColumn column in orders.Columns)
+                    {
+                        if (row[column] == null || row[column] == DBNull.Value)
+                            continue;
+
+                        string value = row[column].ToString();
+
+                        if (value.Contains(article))
+                            return true;
+                    }
+                }
+
+                return false;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private string FindTableName(params string[] keywords)
+        {
+            DataTable tables = Db.GetTable("SELECT name FROM sys.tables");
+
+            foreach (DataRow row in tables.Rows)
+            {
+                string tableName = row["name"].ToString().ToLower();
+
+                foreach (string keyword in keywords)
+                {
+                    if (tableName.Contains(keyword.ToLower()))
+                        return row["name"].ToString();
+                }
+            }
+
+            return "";
+        }
+
+        private string EscapeSqlColumn(string columnName)
+        {
+            return "[" + columnName.Replace("]", "]]") + "]";
+        }
+
+        private string EscapeSqlTable(string tableName)
+        {
+            return "[" + tableName.Replace("]", "]]") + "]";
+        }
+
+        private void LogoutButton_Click(object sender, RoutedEventArgs e)
+        {
+            MainWindow mainWindow = new MainWindow();
+            mainWindow.Show();
+
+            this.Close();
+        }
+    }
+}
